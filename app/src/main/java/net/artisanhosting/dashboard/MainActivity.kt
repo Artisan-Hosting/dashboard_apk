@@ -3,13 +3,13 @@ package net.artisanhosting.dashboard
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.OnBackPressedCallback
+import android.view.WindowManager
 
 class MainActivity : AppCompatActivity() {
 
@@ -17,6 +17,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Run the app in fullscreen
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN
+        )
+        supportActionBar?.hide()
 
         val webView = WebView(this)
         val settings = webView.settings
@@ -49,7 +56,10 @@ class MainActivity : AppCompatActivity() {
                 val url = request.url.toString()
 
                 val basePath = "www"
-                val relativePath = url.substringAfter("file:///android_asset/www/")
+                var relativePath = url.substringAfter("file:///android_asset/www/")
+                if (relativePath.endsWith("/")) {
+                    relativePath = relativePath.dropLast(1)
+                }
 
                 // 1️⃣ Always serve _next assets from root
                 if (url.contains("/_next/")) {
@@ -92,7 +102,15 @@ class MainActivity : AppCompatActivity() {
                     assets.open("$basePath/$relativePath").use { stream ->
                         return WebResourceResponse("text/html", "UTF-8", stream)
                     }
-                } catch (_: Exception) { /* no direct file */ }
+                } catch (_: Exception) {
+                    if (!relativePath.contains('.')) {
+                        try {
+                            assets.open("$basePath/$relativePath.html").use { stream ->
+                                return WebResourceResponse("text/html", "UTF-8", stream)
+                            }
+                        } catch (_: Exception) { /* no direct file */ }
+                    }
+                }
 
                 // 4️⃣ Handle /apps/<id> → apps/[id].html
                 if (relativePath.startsWith("apps/") && relativePath != "apps.html") {
@@ -105,7 +123,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // 5️⃣ Handle /apps → apps.html
-                if (relativePath == "apps" || relativePath == "apps/") {
+                if (relativePath == "apps") {
                     return try {
                         val stream = assets.open("$basePath/apps.html")
                         WebResourceResponse("text/html", "UTF-8", stream)
